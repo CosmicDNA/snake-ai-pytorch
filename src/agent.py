@@ -1,10 +1,12 @@
-import torch
 import random
-import numpy as np
 from collections import deque
+from pathlib import Path
+
+import numpy as np
+import torch
 from game import SnakeGameAI, Direction, Point
-from model import Linear_QNet, QTrainer
 from helper import plot
+from model import QNetLightning
 
 MAX_MEMORY = 100_000
 BATCH_SIZE = 1000
@@ -17,9 +19,12 @@ class Agent:
         self.epsilon = 0 # randomness
         self.gamma = 0.9 # discount rate
         self.memory = deque(maxlen=MAX_MEMORY) # popleft()
-        self.model = Linear_QNet(11, 256, 3)
-        self.trainer = QTrainer(self.model, lr=LR, gamma=self.gamma)
 
+        self.model = QNetLightning(input_size=11, hidden_size=256, output_size=3, lr=LR, gamma=self.gamma)
+        # Manually set the device and initialize the optimizer for a low-overhead loop
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model.to(self.device)
+        self.optimizer = self.model.configure_optimizers()
 
     def get_state(self, game):
         head = game.snake[0]
@@ -77,12 +82,29 @@ class Agent:
             mini_sample = self.memory
 
         states, actions, rewards, next_states, dones = zip(*mini_sample)
-        self.trainer.train_step(states, actions, rewards, next_states, dones)
-        #for state, action, reward, nexrt_state, done in mini_sample:
-        #    self.trainer.train_step(state, action, reward, next_state, done)
+        self._train_step(states, actions, rewards, next_states, dones)
 
     def train_short_memory(self, state, action, reward, next_state, done):
-        self.trainer.train_step(state, action, reward, next_state, done)
+        self._train_step([state], [action], [reward], [next_state], [done])
+
+    def _train_step(self, states, actions, rewards, next_states, dones):
+        # 1. Convert to tensors and move to the correct device
+        states = torch.tensor(np.array(states), dtype=torch.float).to(self.device)
+        actions = torch.tensor(np.array(actions), dtype=torch.float).to(self.device)
+        rewards = torch.tensor(np.array(rewards), dtype=torch.float).to(self.device)
+        next_states = torch.tensor(np.array(next_states), dtype=torch.float).to(self.device)
+        dones = torch.tensor(np.array(dones), dtype=torch.bool).to(self.device)
+
+        # We need to wrap them in a list for the batch format expected by training_step
+        batch = [states, actions, rewards, next_states, dones]
+
+        # 2. Get loss from the model's training_step
+        loss = self.model.training_step(batch, 0) # batch_idx can be 0
+
+        # 3. Manually perform the optimization
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
 
     def get_action(self, state):
         # random moves: tradeoff exploration / exploitation
@@ -92,7 +114,7 @@ class Agent:
             move = random.randint(0, 2)
             final_move[move] = 1
         else:
-            state0 = torch.tensor(state, dtype=torch.float)
+            state0 = torch.tensor(state, dtype=torch.float).to(self.device)
             prediction = self.model(state0)
             move = torch.argmax(prediction).item()
             final_move[move] = 1
@@ -107,6 +129,17 @@ def train():
     record = 0
     agent = Agent()
     game = SnakeGameAI()
+
+    # Create model directory if it doesn't exist
+    model_folder_path = Path('model')
+    model_folder_path.mkdir(parents=True, exist_ok=True)
+    model_path = model_folder_path / 'model.pth'
+
+    # Load existing model if it exists
+    if model_path.exists():
+        print("Loading existing model...")
+        agent.model.load_state_dict(torch.load(model_path))
+
     while True:
         # get old state
         state_old = agent.get_state(game)
@@ -132,7 +165,7 @@ def train():
 
             if score > record:
                 record = score
-                agent.model.save()
+                torch.save(agent.model.state_dict(), model_path)
 
             print('Game', agent.n_games, 'Score', score, 'Record:', record)
 

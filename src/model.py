@@ -1,9 +1,8 @@
+import pytorch_lightning as pl
 import torch
 import torch.nn as nn
-import torch.optim as optim
 import torch.nn.functional as F
-from pathlib import Path
-import numpy as np
+import torch.optim as optim
 
 class Linear_QNet(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
@@ -16,53 +15,40 @@ class Linear_QNet(nn.Module):
         x = self.linear2(x)
         return x
 
-    def save(self, file_name='model.pth'):
-        model_folder_path = Path('model')
-        model_folder_path.mkdir(parents=True, exist_ok=True)
-
-        file_path = model_folder_path / file_name
-        torch.save(self.state_dict(), file_path)
-
-
-class QTrainer:
-    def __init__(self, model, lr, gamma):
-        self.lr = lr
-        self.gamma = gamma
-        self.model = model
-        self.optimizer = optim.Adam(model.parameters(), lr=self.lr)
+class QNetLightning(pl.LightningModule):
+    def __init__(self, input_size, hidden_size, output_size, lr, gamma):
+        super().__init__()
+        self.save_hyperparameters()
+        self.model = Linear_QNet(input_size, hidden_size, output_size)
         self.criterion = nn.MSELoss()
 
-    def train_step(self, state, action, reward, next_state, done):
-        state = torch.tensor(np.array(state), dtype=torch.float)
-        next_state = torch.tensor(np.array(next_state), dtype=torch.float)
-        action = torch.tensor(np.array(action), dtype=torch.long)
-        reward = torch.tensor(np.array(reward), dtype=torch.float)
-        # (n, x)
+    def forward(self, x):
+        return self.model(x)
 
-        if len(state.shape) == 1:
-            # (1, x)
-            state = torch.unsqueeze(state, 0)
-            next_state = torch.unsqueeze(next_state, 0)
-            action = torch.unsqueeze(action, 0)
-            reward = torch.unsqueeze(reward, 0)
-            done = (done, )
+    def configure_optimizers(self):
+        optimizer = optim.Adam(self.parameters(), lr=self.hparams.lr)
+        return optimizer
 
-        # 1: predicted Q values with current state
-        pred = self.model(state)
+    def training_step(self, batch, batch_idx):
+        state, action, reward, next_state, done = batch
 
+        # 1. Get predicted Q-values for current state
+        pred = self(state)
+
+        # 2. Get Q-values for next state and calculate max
+        # .detach() is used to prevent gradients from flowing into the target network
+        next_q_values = self(next_state).detach()
+        max_next_q = next_q_values.max(dim=1)[0]
+
+        # 3. Calculate target Q-value (Bellman equation)
+        # For terminal states (done=True), the future reward is 0
+        Q_new = reward + (self.hparams.gamma * max_next_q * (~done))
+
+        # 4. Create target tensor by cloning predictions and updating with new Q-values
         target = pred.clone()
-        for idx in range(len(done)):
-            Q_new = reward[idx]
-            if not done[idx]:
-                Q_new = reward[idx] + self.gamma * torch.max(self.model(next_state[idx]))
+        action_idxs = torch.argmax(action, dim=1)
+        target[torch.arange(len(done)), action_idxs] = Q_new
 
-            target[idx][torch.argmax(action[idx]).item()] = Q_new
-
-        # 2: Q_new = r + y * max(next_predicted Q value) -> only do this if not done
-        # pred.clone()
-        # preds[argmax(action)] = Q_new
-        self.optimizer.zero_grad()
+        # 5. Calculate loss
         loss = self.criterion(target, pred)
-        loss.backward()
-
-        self.optimizer.step()
+        return loss

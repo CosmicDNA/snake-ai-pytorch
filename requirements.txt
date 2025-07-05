@@ -2,4 +2,5 @@ numpy
 pygame
 torch
 matplotlib
+pytorch-lightning
 IPython
