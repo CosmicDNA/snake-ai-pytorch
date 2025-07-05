@@ -25,5 +25,5 @@ pip install -r requirements.txt
 ## Running Neural Network Training
 
 ```bash
-python agent.py
+python src/agent.py
 ```
