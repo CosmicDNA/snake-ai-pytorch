@@ -11,12 +11,16 @@ from model import QNetLightning
 MAX_MEMORY = 100_000
 BATCH_SIZE = 1000
 LR = 0.001
+EPSILON_START = 1.0  # Start with 100% random moves
+EPSILON_END = 0.01   # End with 1% random moves
+EPSILON_DECAY = 50 # A slower decay allows for more exploration
 
 class Agent:
 
     def __init__(self):
         self.n_games = 0
-        self.epsilon = 0 # randomness
+        # Epsilon is now calculated dynamically based on the number of games
+        # self.epsilon = 0 # randomness
         self.gamma = 0.9 # discount rate
         self.memory = deque(maxlen=MAX_MEMORY) # popleft()
 
@@ -32,7 +36,7 @@ class Agent:
         point_r = Point(head.x + 20, head.y)
         point_u = Point(head.x, head.y - 20)
         point_d = Point(head.x, head.y + 20)
-        
+
         dir_l = game.direction == Direction.LEFT
         dir_r = game.direction == Direction.RIGHT
         dir_u = game.direction == Direction.UP
@@ -40,30 +44,30 @@ class Agent:
 
         state = [
             # Danger straight
-            (dir_r and game.is_collision(point_r)) or 
-            (dir_l and game.is_collision(point_l)) or 
-            (dir_u and game.is_collision(point_u)) or 
+            (dir_r and game.is_collision(point_r)) or
+            (dir_l and game.is_collision(point_l)) or
+            (dir_u and game.is_collision(point_u)) or
             (dir_d and game.is_collision(point_d)),
 
             # Danger right
-            (dir_u and game.is_collision(point_r)) or 
-            (dir_d and game.is_collision(point_l)) or 
-            (dir_l and game.is_collision(point_u)) or 
+            (dir_u and game.is_collision(point_r)) or
+            (dir_d and game.is_collision(point_l)) or
+            (dir_l and game.is_collision(point_u)) or
             (dir_r and game.is_collision(point_d)),
 
             # Danger left
-            (dir_d and game.is_collision(point_r)) or 
-            (dir_u and game.is_collision(point_l)) or 
-            (dir_r and game.is_collision(point_u)) or 
+            (dir_d and game.is_collision(point_r)) or
+            (dir_u and game.is_collision(point_l)) or
+            (dir_r and game.is_collision(point_u)) or
             (dir_l and game.is_collision(point_d)),
-            
+
             # Move direction
             dir_l,
             dir_r,
             dir_u,
             dir_d,
-            
-            # Food location 
+
+            # Food location
             game.food.x < game.head.x,  # food left
             game.food.x > game.head.x,  # food right
             game.food.y < game.head.y,  # food up
@@ -107,10 +111,16 @@ class Agent:
         self.optimizer.step()
 
     def get_action(self, state):
-        # random moves: tradeoff exploration / exploitation
-        self.epsilon = 80 - self.n_games
+        # # random moves: tradeoff exploration / exploitation
+        # # Use exponential decay for a more robust exploration strategy
+        # epsilon = EPSILON_END + (EPSILON_START - EPSILON_END) * \
+        #     np.exp(-1. * self.n_games / EPSILON_DECAY)
+        # final_move = [0,0,0]
+        # if random.random() < epsilon:
+
+        epsilon = 80 - self.n_games
         final_move = [0,0,0]
-        if random.randint(0, 200) < self.epsilon:
+        if random.randint(0, 200) < epsilon:
             move = random.randint(0, 2)
             final_move[move] = 1
         else:
@@ -137,8 +147,17 @@ def train():
 
     # Load existing model if it exists
     if model_path.exists():
-        print("Loading existing model...")
-        agent.model.load_state_dict(torch.load(model_path))
+        print("Loading existing state from model.pth...")
+        checkpoint = torch.load(model_path)
+        agent.model.load_state_dict(checkpoint['model_state_dict'])
+        agent.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        agent.n_games = checkpoint['n_games']
+        record = checkpoint['record']
+        total_score = checkpoint['total_score']
+        plot_scores = checkpoint['plot_scores']
+        plot_mean_scores = checkpoint['plot_mean_scores']
+        # To ensure the agent's exploration continues from where it left off
+        print(f"Resuming from game {agent.n_games} with record {record}")
 
     while True:
         # get old state
@@ -165,7 +184,15 @@ def train():
 
             if score > record:
                 record = score
-                torch.save(agent.model.state_dict(), model_path)
+                torch.save({
+                    'n_games': agent.n_games,
+                    'record': record,
+                    'total_score': total_score,
+                    'plot_scores': plot_scores,
+                    'plot_mean_scores': plot_mean_scores,
+                    'model_state_dict': agent.model.state_dict(),
+                    'optimizer_state_dict': agent.optimizer.state_dict(),
+                }, model_path)
 
             print('Game', agent.n_games, 'Score', score, 'Record:', record)
 

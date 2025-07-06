@@ -24,7 +24,7 @@ BLUE2 = (0, 100, 255)
 BLACK = (0,0,0)
 
 BLOCK_SIZE = 20
-SPEED = 4000
+SPEED = 400
 
 class SnakeGameAI:
 
@@ -73,19 +73,27 @@ class SnakeGameAI:
         self._move(action) # update the head
         self.snake.insert(0, self.head)
 
+        snake_length = len(self.snake)
+
         # 3. check if game over
-        reward = 0
+        # Discourage turning by giving a negative reward
+        reward = 0 if np.array_equal(action, [1, 0, 0]) else -0.2 * snake_length
         game_over = False
-        if self.is_collision() or self.frame_iteration > 100*len(self.snake):
+
+        if self.is_collision() or self.frame_iteration > 100 * snake_length:
             game_over = True
-            reward = -10
+            reward = -10 * snake_length
             return reward, game_over, self.score
 
         # 4. place new food or just move
         if self.head == self.food:
             self.score += 1
-            reward = 10
+            # Reward is inversely proportional to the time taken to find the food.
+            # This encourages speed and efficiency.
+            reward = 20.0 * snake_length / self.frame_iteration
             self._place_food()
+            # Reset the timer for the next food
+            self.frame_iteration = 0
         else:
             self.snake.pop()
 
