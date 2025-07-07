@@ -4,16 +4,15 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from game import SnakeGameAI, Direction, Point
+import torch.nn as nn
+import torch.optim as optim
 from helper import plot
-from model import QNetLightning
+from model import Linear_QNet
+from snake_env import SnakeEnv
 
 MAX_MEMORY = 100_000
 BATCH_SIZE = 1000
 LR = 0.001
-EPSILON_START = 1.0  # Start with 100% random moves
-EPSILON_END = 0.01   # End with 1% random moves
-EPSILON_DECAY = 50 # A slower decay allows for more exploration
 
 class Agent:
 
@@ -24,57 +23,10 @@ class Agent:
         self.gamma = 0.9 # discount rate
         self.memory = deque(maxlen=MAX_MEMORY) # popleft()
 
-        self.model = QNetLightning(input_size=11, hidden_size=256, output_size=3, lr=LR, gamma=self.gamma)
-        # Manually set the device and initialize the optimizer for a low-overhead loop
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model.to(self.device)
-        self.optimizer = self.model.configure_optimizers()
-
-    def get_state(self, game):
-        head = game.snake[0]
-        point_l = Point(head.x - 20, head.y)
-        point_r = Point(head.x + 20, head.y)
-        point_u = Point(head.x, head.y - 20)
-        point_d = Point(head.x, head.y + 20)
-
-        dir_l = game.direction == Direction.LEFT
-        dir_r = game.direction == Direction.RIGHT
-        dir_u = game.direction == Direction.UP
-        dir_d = game.direction == Direction.DOWN
-
-        state = [
-            # Danger straight
-            (dir_r and game.is_collision(point_r)) or
-            (dir_l and game.is_collision(point_l)) or
-            (dir_u and game.is_collision(point_u)) or
-            (dir_d and game.is_collision(point_d)),
-
-            # Danger right
-            (dir_u and game.is_collision(point_r)) or
-            (dir_d and game.is_collision(point_l)) or
-            (dir_l and game.is_collision(point_u)) or
-            (dir_r and game.is_collision(point_d)),
-
-            # Danger left
-            (dir_d and game.is_collision(point_r)) or
-            (dir_u and game.is_collision(point_l)) or
-            (dir_r and game.is_collision(point_u)) or
-            (dir_l and game.is_collision(point_d)),
-
-            # Move direction
-            dir_l,
-            dir_r,
-            dir_u,
-            dir_d,
-
-            # Food location
-            game.food.x < game.head.x,  # food left
-            game.food.x > game.head.x,  # food right
-            game.food.y < game.head.y,  # food up
-            game.food.y > game.head.y  # food down
-            ]
-
-        return np.array(state, dtype=int)
+        self.model = Linear_QNet(input_size=11, hidden_size=256, output_size=3).to(self.device)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=LR)
+        self.criterion = nn.MSELoss()
 
     def remember(self, state, action, reward, next_state, done):
         self.memory.append((state, action, reward, next_state, done)) # popleft if MAX_MEMORY is reached
@@ -94,42 +46,45 @@ class Agent:
     def _train_step(self, states, actions, rewards, next_states, dones):
         # 1. Convert to tensors and move to the correct device
         states = torch.tensor(np.array(states), dtype=torch.float).to(self.device)
-        actions = torch.tensor(np.array(actions), dtype=torch.float).to(self.device)
+        # Actions are now integers, convert to long tensor for indexing
+        actions = torch.tensor(actions, dtype=torch.long).to(self.device)
         rewards = torch.tensor(np.array(rewards), dtype=torch.float).to(self.device)
         next_states = torch.tensor(np.array(next_states), dtype=torch.float).to(self.device)
         dones = torch.tensor(np.array(dones), dtype=torch.bool).to(self.device)
 
-        # We need to wrap them in a list for the batch format expected by training_step
-        batch = [states, actions, rewards, next_states, dones]
+        # 2. Get predicted Q-values for current state
+        pred = self.model(states)
 
-        # 2. Get loss from the model's training_step
-        loss = self.model.training_step(batch, 0) # batch_idx can be 0
+        # 3. Get Q-values for next state and calculate max
+        target = pred.clone()
+        next_q_values = self.model(next_states).detach()
+        max_next_q = next_q_values.max(dim=1)[0]
 
-        # 3. Manually perform the optimization
+        # 4. Calculate target Q-value (Bellman equation)
+        # For terminal states (done=True), the future reward is 0
+        Q_new = rewards + (self.gamma * max_next_q * (~dones))
+
+        # 5. Create target tensor by cloning predictions and updating with new Q-values
+        target[torch.arange(len(dones)), actions] = Q_new
+
+        # 6. Calculate loss
+        loss = self.criterion(target, pred)
+
+        # 7. Manually perform the optimization
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
 
     def get_action(self, state):
-        # # random moves: tradeoff exploration / exploitation
-        # # Use exponential decay for a more robust exploration strategy
-        # epsilon = EPSILON_END + (EPSILON_START - EPSILON_END) * \
-        #     np.exp(-1. * self.n_games / EPSILON_DECAY)
-        # final_move = [0,0,0]
-        # if random.random() < epsilon:
-
         epsilon = 80 - self.n_games
-        final_move = [0,0,0]
         if random.randint(0, 200) < epsilon:
             move = random.randint(0, 2)
-            final_move[move] = 1
         else:
             state0 = torch.tensor(state, dtype=torch.float).to(self.device)
             prediction = self.model(state0)
             move = torch.argmax(prediction).item()
-            final_move[move] = 1
 
-        return final_move
+        return move
 
 
 def train():
@@ -138,7 +93,8 @@ def train():
     total_score = 0
     record = 0
     agent = Agent()
-    game = SnakeGameAI()
+    # Use the new Gymnasium environment
+    env = SnakeEnv()
 
     # Create model directory if it doesn't exist
     model_folder_path = Path('model')
@@ -159,40 +115,42 @@ def train():
         # To ensure the agent's exploration continues from where it left off
         print(f"Resuming from game {agent.n_games} with record {record}")
 
+    # Initial state from the environment
+    state_old, info = env.reset()
+
     while True:
-        # get old state
-        state_old = agent.get_state(game)
+        # get move (action is now an integer: 0, 1, or 2)
+        action = agent.get_action(state_old)
 
-        # get move
-        final_move = agent.get_action(state_old)
-
-        # perform move and get new state
-        reward, done, score = game.play_step(final_move)
-        state_new = agent.get_state(game)
+        # perform move and get new state from environment
+        state_new, reward, terminated, truncated, info = env.step(action)
+        score = info['score']
+        env.render()
 
         # train short memory
-        agent.train_short_memory(state_old, final_move, reward, state_new, done)
+        agent.train_short_memory(state_old, action, reward, state_new, terminated)
 
         # remember
-        agent.remember(state_old, final_move, reward, state_new, done)
+        agent.remember(state_old, action, reward, state_new, terminated)
 
-        if done:
+        # The current step is done, update the state for the next iteration
+        state_old = state_new
+
+        if terminated:
             # train long memory, plot result
-            game.reset()
             agent.n_games += 1
             agent.train_long_memory()
 
             if score > record:
                 record = score
-                torch.save({
-                    'n_games': agent.n_games,
-                    'record': record,
-                    'total_score': total_score,
-                    'plot_scores': plot_scores,
-                    'plot_mean_scores': plot_mean_scores,
+                # Save model checkpoint
+                checkpoint = {
+                    'n_games': agent.n_games, 'record': record, 'total_score': total_score,
+                    'plot_scores': plot_scores, 'plot_mean_scores': plot_mean_scores,
                     'model_state_dict': agent.model.state_dict(),
                     'optimizer_state_dict': agent.optimizer.state_dict(),
-                }, model_path)
+                }
+                torch.save(checkpoint, model_path)
 
             print('Game', agent.n_games, 'Score', score, 'Record:', record)
 
@@ -201,6 +159,9 @@ def train():
             mean_score = total_score / agent.n_games
             plot_mean_scores.append(mean_score)
             plot(plot_scores, plot_mean_scores)
+
+            # Reset the environment and get the new initial state
+            state_old, info = env.reset()
 
 
 if __name__ == '__main__':

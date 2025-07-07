@@ -2,10 +2,14 @@ import pygame
 import random
 from enum import Enum
 from collections import namedtuple
+from pathlib import Path
 import numpy as np
 
 pygame.init()
-font = pygame.font.Font('arial.ttf', 25)
+
+# Construct a path to the font file relative to this script's location
+BASE_DIR = Path(__file__).resolve().parent
+font = pygame.font.Font(BASE_DIR / 'assets' / 'arial.ttf', 25)
 #font = pygame.font.SysFont('arial', 25)
 
 class Direction(Enum):
@@ -63,44 +67,27 @@ class SnakeGameAI:
 
     def play_step(self, action):
         self.frame_iteration += 1
-        # 1. collect user input
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                quit()
 
         # 2. move
         self._move(action) # update the head
         self.snake.insert(0, self.head)
 
-        snake_length = len(self.snake)
-
         # 3. check if game over
-        # Discourage turning by giving a negative reward
-        reward = 0 if np.array_equal(action, [1, 0, 0]) else -0.2 * snake_length
+        reward = 0
         game_over = False
-
-        if self.is_collision() or self.frame_iteration > 100 * snake_length:
+        if self.is_collision() or self.frame_iteration > 100*len(self.snake):
             game_over = True
-            reward = -10 * snake_length
+            reward = -10
             return reward, game_over, self.score
 
         # 4. place new food or just move
         if self.head == self.food:
             self.score += 1
-            # Reward is inversely proportional to the time taken to find the food.
-            # This encourages speed and efficiency.
-            reward = 20.0 * snake_length / self.frame_iteration
+            reward = 10
             self._place_food()
-            # Reset the timer for the next food
-            self.frame_iteration = 0
         else:
             self.snake.pop()
 
-        # 5. update ui and clock
-        self._update_ui()
-        self.clock.tick(SPEED)
-        # 6. return game over and score
         return reward, game_over, self.score
 
 

@@ -2,9 +2,13 @@ import pygame
 import random
 from enum import Enum
 from collections import namedtuple
+from pathlib import Path
 
 pygame.init()
-font = pygame.font.Font('arial.ttf', 25)
+
+# Construct a path to the font file relative to this script's location
+BASE_DIR = Path(__file__).resolve().parent
+font = pygame.font.Font(BASE_DIR / 'assets' / 'arial.ttf', 25)
 #font = pygame.font.SysFont('arial', 25)
 
 class Direction(Enum):
