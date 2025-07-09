@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from helper import plot
-from model import Linear_QNet
+from model import Dueling_QNet
 from snake_env import SnakeEnv
 
 MAX_MEMORY = 100_000
@@ -24,7 +24,7 @@ class Agent:
         self.memory = deque(maxlen=MAX_MEMORY) # popleft()
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model = Linear_QNet(input_size=11, hidden_size=256, output_size=3).to(self.device)
+        self.model = Dueling_QNet(input_size=11, hidden_size=256, output_size=3).to(self.device)
         self.optimizer = optim.Adam(self.model.parameters(), lr=LR)
         self.criterion = nn.MSELoss()
 
@@ -80,7 +80,8 @@ class Agent:
         if random.randint(0, 200) < epsilon:
             move = random.randint(0, 2)
         else:
-            state0 = torch.tensor(state, dtype=torch.float).to(self.device)
+            # Add a batch dimension for the model, which expects a 2D tensor
+            state0 = torch.tensor(state, dtype=torch.float).unsqueeze(0).to(self.device)
             prediction = self.model(state0)
             move = torch.argmax(prediction).item()
 
