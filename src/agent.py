@@ -94,7 +94,8 @@ def train():
     record = 0
     agent = Agent()
     # Use the new Gymnasium environment
-    env = SnakeEnv(render_mode='fast_training')
+    # env = SnakeEnv(render_mode='fast_training')
+    env = SnakeEnv(render_mode='human')
 
     # Create model directory if it doesn't exist
     model_folder_path = Path('model')
