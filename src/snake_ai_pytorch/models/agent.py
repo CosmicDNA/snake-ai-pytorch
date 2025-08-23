@@ -80,8 +80,8 @@ class Agent:
     def get_action(self, state):
         # random moves: tradeoff exploration / exploitation
         epsilon = 80 - self.n_games
-        if random.randint(0, 200) < epsilon:
-            move = random.randint(0, 2)
+        if random.randint(0, 200) < epsilon:  # nosec
+            move = random.randint(0, 2)  # nosec
         else:
             # Add a batch dimension for the model, which expects a 2D tensor
             state0 = torch.tensor(state, dtype=torch.float).unsqueeze(0).to(self.device)

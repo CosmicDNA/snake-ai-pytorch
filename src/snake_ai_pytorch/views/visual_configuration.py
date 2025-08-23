@@ -8,7 +8,9 @@ class GameColors:
     BLUE2 = (0, 100, 255)
     BLACK = (0, 0, 0)
 
+
 BASE_DIR = Path(__file__).resolve().parent.parent
+
 
 class FontConfig:
     # Construct a path to the font file relative to this script's location

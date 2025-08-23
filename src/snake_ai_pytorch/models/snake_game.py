@@ -10,6 +10,7 @@ from snake_ai_pytorch.views.visual_configuration import BLOCK_SIZE, SPEED
 
 class SnakeGame:
     renderer: Renderer = None
+
     def __init__(self, w=640, h=480, render_mode="human"):
         self.w = w
         self.h = h
@@ -29,8 +30,8 @@ class SnakeGame:
         self._place_food()
 
     def _place_food(self):
-        x = random.randint(0, (self.w - BLOCK_SIZE) // BLOCK_SIZE) * BLOCK_SIZE
-        y = random.randint(0, (self.h - BLOCK_SIZE) // BLOCK_SIZE) * BLOCK_SIZE
+        x = random.randint(0, (self.w - BLOCK_SIZE) // BLOCK_SIZE) * BLOCK_SIZE  # nosec
+        y = random.randint(0, (self.h - BLOCK_SIZE) // BLOCK_SIZE) * BLOCK_SIZE  # nosec
         self.food = Point(x, y)
         if self.food in self.snake:
             self._place_food()
