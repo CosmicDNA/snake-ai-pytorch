@@ -1,4 +1,9 @@
+from snake_ai_pytorch.models.agent import Agent  # noqa: F401
 from snake_ai_pytorch.models.direction import Direction  # noqa: F401
 from snake_ai_pytorch.models.dueling_qnet import DuelingQNet  # noqa: F401
 from snake_ai_pytorch.models.linear_qnet import LinearQNet  # noqa: F401
 from snake_ai_pytorch.models.point import Point  # noqa: F401
+from snake_ai_pytorch.models.renderer import Renderer  # noqa: F401
+from snake_ai_pytorch.models.snake_env import SnakeEnv  # noqa: F401
+from snake_ai_pytorch.models.snake_game import SnakeGame  # noqa: F401
+from snake_ai_pytorch.models.snake_game_human import SnakeGameHuman  # noqa: F401

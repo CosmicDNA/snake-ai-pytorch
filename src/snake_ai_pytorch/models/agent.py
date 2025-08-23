@@ -9,9 +9,9 @@ import torch.nn as nn
 import torch.optim as optim
 from torch import Tensor
 
-from snake_ai_pytorch.models import DuelingQNet
-from snake_ai_pytorch.snake_env import SnakeEnv
-from snake_ai_pytorch.views.progress_graph import plot
+from snake_ai_pytorch.models.dueling_qnet import DuelingQNet
+from snake_ai_pytorch.models.snake_env import SnakeEnv
+from snake_ai_pytorch.views import plot
 
 
 class Agent:
@@ -19,12 +19,13 @@ class Agent:
     BATCH_SIZE = 1000
     LR = 0.001
 
-    def __init__(self):
+    def __init__(self, render_mode="human"):
         self.n_games = 0
         # Epsilon is now calculated dynamically based on the number of games
         # self.epsilon = 0 # randomness
         self.gamma = 0.9  # discount rate
         self.memory = deque(maxlen=self.MAX_MEMORY)  # popleft()
+        self.render_mode = render_mode
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = DuelingQNet(input_size=11, hidden_size=256, output_size=3).to(self.device)
@@ -96,8 +97,7 @@ class Agent:
         record = 0
         agent = Agent()
         # Use the new Gymnasium environment
-        # env = SnakeEnv(render_mode='fast_training')
-        env = SnakeEnv(render_mode="human")
+        env = SnakeEnv(render_mode=self.render_mode)
 
         # Create model directory if it doesn't exist
         model_folder_path = Path("model")

@@ -1,6 +1,7 @@
 import numpy as np
 
-from snake_ai_pytorch.snake_game_human import Direction, SnakeGame
+from snake_ai_pytorch.models.direction import Direction
+from snake_ai_pytorch.models.snake_game import SnakeGame
 
 
 class SnakeGameAI(SnakeGame):

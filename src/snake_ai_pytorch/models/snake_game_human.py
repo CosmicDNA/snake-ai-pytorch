@@ -2,10 +2,11 @@ import logging
 
 import pygame
 
-from snake_ai_pytorch.snake_game_human import Direction, SnakeGame
+from snake_ai_pytorch.models.direction import Direction
+from snake_ai_pytorch.models.snake_game import SnakeGame
 
 
-class SnakeEnvHuman:
+class SnakeGameHuman:
     """An environment to run the human-playable version of the Snake game.
 
     This class is responsible for the game loop, handling user input,
@@ -14,7 +15,8 @@ class SnakeEnvHuman:
     """
 
     def __init__(self, w=640, h=480):
-        self.game = SnakeGame(w, h)
+        self.game = SnakeGame(w, h, render_mode="human")
+        self.speed = 15  # Set a comfortable speed for human play
 
     def run(self):
         """Starts and manages the main game loop."""
@@ -39,7 +41,7 @@ class SnakeEnvHuman:
             game_over, score = self.game.play_step(self.game.direction)
 
             # 3. Render the game
-            self.game.render()
+            self.game.render(self.speed)
 
             # 4. Check for game over
             if game_over:
@@ -52,5 +54,5 @@ class SnakeEnvHuman:
 
 
 if __name__ == "__main__":
-    env = SnakeEnvHuman()
+    env = SnakeGameHuman()
     env.run()

@@ -2,9 +2,10 @@ import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 
-from snake_ai_pytorch.game import SnakeGameAI
-from snake_ai_pytorch.snake_game_human import Direction, Point
-from snake_ai_pytorch.views import BLOCK_SIZE
+from snake_ai_pytorch.models.direction import Direction
+from snake_ai_pytorch.models.point import Point
+from snake_ai_pytorch.models.snake_game_ai import SnakeGameAI
+from snake_ai_pytorch.views.visual_configuration import BLOCK_SIZE
 
 
 class SnakeEnv(gym.Env):
