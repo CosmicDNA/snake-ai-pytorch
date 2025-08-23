@@ -19,11 +19,11 @@ python -m venv .venv
 source ./.venv/bin/activate
 
 # Install dependencies
-pip install -r requirements.txt
+pip install -e .
 ```
 
 ## Running Neural Network Training
 
 ```bash
-python src/agent.py
+python src/snake_ai_pytorch/agent.py
 ```

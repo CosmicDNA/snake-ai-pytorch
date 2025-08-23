@@ -1,4 +1,7 @@
 .venv/
 __pycache__/
-model/
 .vscode/
+logs/
+src/snake_ai_pytorch.egg-info/
+.pytest_cache/
+model/

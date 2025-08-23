@@ -1,6 +1,0 @@
-numpy
-pygame
-torch
-matplotlib
-IPython
-gymnasium
