@@ -1,6 +1,5 @@
 import gymnasium as gym
 import numpy as np
-import pygame
 from gymnasium import spaces
 
 from snake_ai_pytorch.game import SnakeGameAI
@@ -15,7 +14,7 @@ class SnakeEnv(gym.Env):
 
     def __init__(self, w=640, h=480, render_mode="human"):
         super().__init__()
-        self.game = SnakeGameAI(w, h)
+        self.game = SnakeGameAI(w, h, render_mode=render_mode)
         self.render_mode = render_mode
 
         # Action space: 0: straight, 1: right turn, 2: left turn
@@ -89,16 +88,4 @@ class SnakeEnv(gym.Env):
         return observation, reward, terminated, False, info  # truncated is always False
 
     def render(self):
-        # This is the standard way to handle rendering and events in a Pygame-based gym env
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                quit()
-
-        if self.render_mode != "human":
-            return
-
         self.game.render(self.metadata["render_fps"])
-
-    def close(self):
-        pygame.quit()

@@ -6,16 +6,37 @@ from snake_ai_pytorch.models import Direction, Point
 from snake_ai_pytorch.views import BLOCK_SIZE, SPEED, FontConfig, GameColors
 
 
-class SnakeGame:
-    def __init__(self, w=640, h=480):
-        self.w = w
-        self.h = h
+class Renderer:
+    def __init__(self, game):
         pygame.init()
+        self.game = game
         self.font = pygame.font.Font(FontConfig.path, FontConfig.size)
         # init display
-        self.display = pygame.display.set_mode((self.w, self.h))
+        self.display = pygame.display.set_mode((self.game.w, self.game.h))
         pygame.display.set_caption("Snake")
         self.clock = pygame.time.Clock()
+
+    def render(self, render_fps=SPEED):
+        self.display.fill(GameColors.BLACK)
+
+        for pt in self.game.snake:
+            pygame.draw.rect(self.display, GameColors.BLUE1, pygame.Rect(pt.x, pt.y, BLOCK_SIZE, BLOCK_SIZE))
+            pygame.draw.rect(self.display, GameColors.BLUE2, pygame.Rect(pt.x + 4, pt.y + 4, 12, 12))
+
+        pygame.draw.rect(self.display, GameColors.RED, pygame.Rect(self.game.food.x, self.game.food.y, BLOCK_SIZE, BLOCK_SIZE))
+
+        text = self.font.render("Score: " + str(self.game.score), True, GameColors.WHITE)
+        self.display.blit(text, [0, 0])
+        pygame.display.flip()
+        self.clock.tick(render_fps)
+
+class SnakeGame:
+    renderer: Renderer = None
+    def __init__(self, w=640, h=480, render_mode="human"):
+        self.w = w
+        self.h = h
+        if render_mode == "human":
+            self.renderer = Renderer(self)
         self.reset()
 
     def reset(self):
@@ -80,15 +101,13 @@ class SnakeGame:
         self.head = Point(x, y)
 
     def render(self, render_fps=SPEED):
-        self.display.fill(GameColors.BLACK)
+        if self.renderer is None:
+            return
 
-        for pt in self.snake:
-            pygame.draw.rect(self.display, GameColors.BLUE1, pygame.Rect(pt.x, pt.y, BLOCK_SIZE, BLOCK_SIZE))
-            pygame.draw.rect(self.display, GameColors.BLUE2, pygame.Rect(pt.x + 4, pt.y + 4, 12, 12))
+        # This is the standard way to handle rendering and events in a Pygame-based gym env
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                quit()
 
-        pygame.draw.rect(self.display, GameColors.RED, pygame.Rect(self.food.x, self.food.y, BLOCK_SIZE, BLOCK_SIZE))
-
-        text = self.font.render("Score: " + str(self.score), True, GameColors.WHITE)
-        self.display.blit(text, [0, 0])
-        pygame.display.flip()
-        self.clock.tick(render_fps)
+        self.renderer.render(render_fps)

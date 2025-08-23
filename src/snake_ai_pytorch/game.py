@@ -9,8 +9,8 @@ class SnakeGameAI(SnakeGame):
     It provides methods to get the current state of the game and to perform actions.
     """
 
-    def __init__(self, w=640, h=480):
-        super().__init__(w, h)
+    def __init__(self, w=640, h=480, render_mode="human"):
+        super().__init__(w, h, render_mode)
 
     def reset(self):
         """Reset the game state to the initial conditions."""
