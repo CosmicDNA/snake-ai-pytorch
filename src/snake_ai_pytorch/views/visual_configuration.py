@@ -1,7 +1,5 @@
 from pathlib import Path
 
-import pygame
-
 
 class GameColors:
     WHITE = (255, 255, 255)
@@ -10,10 +8,13 @@ class GameColors:
     BLUE2 = (0, 100, 255)
     BLACK = (0, 0, 0)
 
+BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Construct a path to the font file relative to this script's location
-BASE_DIR = Path(__file__).resolve().parent
-font = pygame.font.Font(BASE_DIR / "assets" / "arial.ttf", 25)
+class FontConfig:
+    # Construct a path to the font file relative to this script's location
+    path = BASE_DIR / "assets" / "arial.ttf"
+    size = 25
+
 
 BLOCK_SIZE = 20
 SPEED = 75

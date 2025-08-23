@@ -14,11 +14,11 @@ class Point(namedtuple("Point", "x, y")):
 
     def __sub__(self, other: Point) -> Point:
         """Subtract one from another."""
-        return Point(self.x - other.x, self.y - self.x)
+        return Point(self.x - other.x, self.y - self.y)
 
     def __add__(self, other: Point) -> Point:
         """Add one to another."""
-        return Point(self.x + other.x, self.y + self.x)
+        return Point(self.x + other.x, self.y + self.y)
 
     def distance_to(self, other: Point):
         return np.linalg.norm((self - other).to_array())

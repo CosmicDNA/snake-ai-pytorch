@@ -3,15 +3,15 @@ import random
 import pygame
 
 from snake_ai_pytorch.models import Direction, Point
-from snake_ai_pytorch.views import BLOCK_SIZE, SPEED, GameColors, font
-
-pygame.init()
+from snake_ai_pytorch.views import BLOCK_SIZE, SPEED, FontConfig, GameColors
 
 
 class SnakeGame:
     def __init__(self, w=640, h=480):
         self.w = w
         self.h = h
+        pygame.init()
+        self.font = pygame.font.Font(FontConfig.path, FontConfig.size)
         # init display
         self.display = pygame.display.set_mode((self.w, self.h))
         pygame.display.set_caption("Snake")
@@ -88,7 +88,7 @@ class SnakeGame:
 
         pygame.draw.rect(self.display, GameColors.RED, pygame.Rect(self.food.x, self.food.y, BLOCK_SIZE, BLOCK_SIZE))
 
-        text = font.render("Score: " + str(self.score), True, GameColors.WHITE)
+        text = self.font.render("Score: " + str(self.score), True, GameColors.WHITE)
         self.display.blit(text, [0, 0])
         pygame.display.flip()
         self.clock.tick(render_fps)
