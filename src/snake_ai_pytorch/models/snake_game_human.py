@@ -17,6 +17,13 @@ class SnakeGameHuman:
     def __init__(self, w=640, h=480):
         self.game = SnakeGame(w, h, render_mode="human")
         self.speed = 15  # Set a comfortable speed for human play
+        self.key_direction_map = {
+            pygame.K_LEFT: Direction.LEFT,
+            pygame.K_RIGHT: Direction.RIGHT,
+            pygame.K_UP: Direction.UP,
+            pygame.K_DOWN: Direction.DOWN,
+        }
+        self.allowed_keys = [pygame.K_LEFT, pygame.K_RIGHT, pygame.K_UP, pygame.K_DOWN]
 
     def run(self):
         """Starts and manages the main game loop."""
@@ -28,14 +35,9 @@ class SnakeGameHuman:
                     running = False
                 if event.type == pygame.KEYDOWN:
                     # Prevent the snake from reversing on itself
-                    if event.key == pygame.K_LEFT and self.game.direction != Direction.RIGHT:
-                        self.game.direction = Direction.LEFT
-                    elif event.key == pygame.K_RIGHT and self.game.direction != Direction.LEFT:
-                        self.game.direction = Direction.RIGHT
-                    elif event.key == pygame.K_UP and self.game.direction != Direction.DOWN:
-                        self.game.direction = Direction.UP
-                    elif event.key == pygame.K_DOWN and self.game.direction != Direction.UP:
-                        self.game.direction = Direction.DOWN
+                    key_direction = self.key_direction_map[event.key]
+                    if event.key in self.allowed_keys and self.game.direction != key_direction.opposite:
+                        self.game.direction = key_direction
 
             # 2. Advance the game state
             game_over, score = self.game.play_step(self.game.direction)
