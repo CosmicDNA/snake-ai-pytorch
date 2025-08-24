@@ -1,6 +1,5 @@
 import numpy as np
 
-from snake_ai_pytorch.models.direction import Direction
 from snake_ai_pytorch.models.snake_game import SnakeGame
 
 
@@ -51,13 +50,7 @@ class SnakeGameAI(SnakeGame):
 
         Action is a 3-element list: [straight, right_turn, left_turn]
         """
-        # Define clockwise direction sequence
-        clock_wise = [Direction.RIGHT, Direction.DOWN, Direction.LEFT, Direction.UP]
-        idx = clock_wise.index(self.direction)
-
         if np.array_equal(action, [0, 1, 0]):  # right turn
-            next_idx = (idx + 1) % 4
-            self.direction = clock_wise[next_idx]
+            self.direction = self.direction.cw
         elif np.array_equal(action, [0, 0, 1]):  # left turn
-            next_idx = (idx - 1) % 4
-            self.direction = clock_wise[next_idx]
+            self.direction = self.direction.ccw
