@@ -1,4 +1,5 @@
 import logging
+import os
 from typing import TYPE_CHECKING
 
 import pygame
@@ -11,12 +12,15 @@ if TYPE_CHECKING:
 
 class Renderer:
     def __init__(self, game: "SnakeGame"):
+        # Force SDL to use the pulse audio driver, which is forwarded by WSL2.
+        # This must be set before pygame is initialized.
+        os.environ["SDL_AUDIODRIVER"] = "pulse"
         pygame.init()
         self.game = game
         self.font = pygame.font.Font(FontConfig.path, FontConfig.size)
         self.eat_sound = None
         try:
-            pygame.mixer.init()
+            # Initialize with a smaller buffer for lower latency.
             self.eat_sound = pygame.mixer.Sound(SoundConfig.eat_path)
         except pygame.error as e:
             logging.warning(f"Could not initialise sound: {e}")
