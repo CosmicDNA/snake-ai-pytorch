@@ -27,8 +27,7 @@ class SnakeGameAI(SnakeGame):
         self.frame_iteration += 1
 
         # 1. determine new direction from action
-        reward = 0
-        reward += self._determine_direction(action)
+        reward = self._determine_direction(action)
 
         # 2. move
         self._move(self.direction)  # update the head
@@ -43,9 +42,8 @@ class SnakeGameAI(SnakeGame):
 
         # 4. place new food or just move
         if self.head == self.food:
-            self.score += 1
             reward += self.REWARD_FOOD
-            self._place_food()
+            self._eat_food()
         else:
             reward += self.REWARD_MOVE
             self.snake.pop()

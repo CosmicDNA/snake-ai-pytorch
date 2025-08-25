@@ -1,5 +1,4 @@
-import random
-
+import numpy as np
 import pygame
 
 from snake_ai_pytorch.models.direction import Direction
@@ -10,6 +9,13 @@ from snake_ai_pytorch.views.visual_configuration import BLOCK_SIZE, SPEED
 
 class SnakeGame:
     renderer: Renderer = None
+
+    direction_map = {
+        Direction.RIGHT: Point(BLOCK_SIZE, 0),
+        Direction.LEFT: Point(-BLOCK_SIZE, 0),
+        Direction.DOWN: Point(0, BLOCK_SIZE),
+        Direction.UP: Point(0, -BLOCK_SIZE),
+    }
 
     def __init__(self, w=640, h=480, render_mode="human"):
         self.w = w
@@ -30,11 +36,22 @@ class SnakeGame:
         self._place_food()
 
     def _place_food(self):
-        x = random.randint(0, (self.w - BLOCK_SIZE) // BLOCK_SIZE) * BLOCK_SIZE  # nosec
-        y = random.randint(0, (self.h - BLOCK_SIZE) // BLOCK_SIZE) * BLOCK_SIZE  # nosec
-        self.food = Point(x, y)
-        if self.food in self.snake:
-            self._place_food()
+        grid_dims = np.array([self.w, self.h]) // BLOCK_SIZE
+
+        while True:
+            # Generate random x, y block coordinates. `high` is exclusive.
+            block_coords = np.random.randint(0, grid_dims, size=2)
+            new_food = Point(*(block_coords * BLOCK_SIZE))
+
+            if new_food not in self.snake:
+                self.food = new_food
+                break
+
+    def _eat_food(self):
+        self.score += 1
+        if self.renderer:
+            self.renderer.play_eat_sound()
+        self._place_food()
 
     def play_step(self, direction):
         # 2. move
@@ -48,8 +65,7 @@ class SnakeGame:
         else:
             # 4. place new food or just move
             if self.head == self.food:
-                self.score += 1
-                self._place_food()
+                self._eat_food()
             else:
                 self.snake.pop()
 
@@ -66,18 +82,7 @@ class SnakeGame:
         return pt in self.snake[1:]
 
     def _move(self, direction):
-        x = self.head.x
-        y = self.head.y
-        if direction == Direction.RIGHT:
-            x += BLOCK_SIZE
-        elif direction == Direction.LEFT:
-            x -= BLOCK_SIZE
-        elif direction == Direction.DOWN:
-            y += BLOCK_SIZE
-        elif direction == Direction.UP:
-            y -= BLOCK_SIZE
-
-        self.head = Point(x, y)
+        self.head += self.direction_map[direction]
 
     def render(self, render_fps=SPEED):
         if self.renderer is None:

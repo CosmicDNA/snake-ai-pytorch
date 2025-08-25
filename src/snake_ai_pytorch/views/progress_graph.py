@@ -1,4 +1,5 @@
 import multiprocessing as mp
+from queue import Empty
 
 
 class Plotting:
@@ -50,22 +51,24 @@ class Plotting:
 
             while True:
                 try:
-                    if not queue.empty():
-                        data = queue.get()
-                        if data is None:  # Sentinel for stopping
-                            break
+                    # Use a non-blocking get to avoid race conditions and deadlocks
+                    data = queue.get_nowait()
+                    if data is None:  # Sentinel for stopping
+                        break
 
-                        command, values = data
-                        if command == "load":
-                            scores, mean_scores = values
-                        elif command == "plot":
-                            score, mean_score = values
-                            scores.append(score)
-                            mean_scores.append(mean_score)
-                        elif command == "add_marker":
-                            training_end_marker = values
-                        update_plot_data()
+                    command, values = data
+                    if command == "load":
+                        scores, mean_scores = values
+                    elif command == "plot":
+                        score, mean_score = values
+                        scores.append(score)
+                        mean_scores.append(mean_score)
+                    elif command == "add_marker":
+                        training_end_marker = values
+                    update_plot_data()
 
+                except Empty:
+                    # No data in the queue, pause briefly to allow the GUI to process events
                     plt.pause(0.1)
                 except (KeyboardInterrupt, BrokenPipeError):
                     break

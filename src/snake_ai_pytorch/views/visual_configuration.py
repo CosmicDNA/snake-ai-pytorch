@@ -18,5 +18,11 @@ class FontConfig:
     size = 25
 
 
+class SoundConfig:
+    # Path to the sound file for when the snake eats food
+    eat_path = BASE_DIR / "assets" / "eat.wav"
+
+
 BLOCK_SIZE = 20
 SPEED = 75
+BORDER_SIZE = 4

@@ -1,8 +1,9 @@
+import logging
 from typing import TYPE_CHECKING
 
 import pygame
 
-from snake_ai_pytorch.views.visual_configuration import BLOCK_SIZE, SPEED, FontConfig, GameColors
+from snake_ai_pytorch.views.visual_configuration import BLOCK_SIZE, BORDER_SIZE, SPEED, FontConfig, GameColors, SoundConfig
 
 if TYPE_CHECKING:
     from snake_ai_pytorch.models.snake_game import SnakeGame
@@ -13,17 +14,30 @@ class Renderer:
         pygame.init()
         self.game = game
         self.font = pygame.font.Font(FontConfig.path, FontConfig.size)
+        self.eat_sound = None
+        try:
+            pygame.mixer.init()
+            self.eat_sound = pygame.mixer.Sound(SoundConfig.eat_path)
+        except pygame.error as e:
+            logging.warning(f"Could not initialise sound: {e}")
         # init display
         self.display = pygame.display.set_mode((self.game.w, self.game.h))
         pygame.display.set_caption("Snake")
         self.clock = pygame.time.Clock()
+        self.INNER_BLOCK_SIZE = BLOCK_SIZE - 2 * BORDER_SIZE
+
+    def play_eat_sound(self):
+        if self.eat_sound:
+            self.eat_sound.play()
 
     def render(self, render_fps=SPEED):
         self.display.fill(GameColors.BLACK)
 
         for pt in self.game.snake:
             pygame.draw.rect(self.display, GameColors.BLUE1, pygame.Rect(pt.x, pt.y, BLOCK_SIZE, BLOCK_SIZE))
-            pygame.draw.rect(self.display, GameColors.BLUE2, pygame.Rect(pt.x + 4, pt.y + 4, 12, 12))
+            pygame.draw.rect(
+                self.display, GameColors.BLUE2, pygame.Rect(pt.x + BORDER_SIZE, pt.y + BORDER_SIZE, self.INNER_BLOCK_SIZE, self.INNER_BLOCK_SIZE)
+            )
 
         pygame.draw.rect(self.display, GameColors.RED, pygame.Rect(self.game.food.x, self.game.food.y, BLOCK_SIZE, BLOCK_SIZE))
 
