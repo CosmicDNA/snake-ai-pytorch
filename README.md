@@ -22,8 +22,22 @@ source ./.venv/bin/activate
 pip install -e .
 ```
 
-## Running Neural Network Training
+## Evaluating the Neural Network
+
+### 1. Running the training
 
 ```bash
-python src/snake_ai_pytorch/agent.py
+python src/snake_ai_pytorch/controllers/train.py
+```
+
+### 2. Seeing the trained agent play
+
+```bash
+python src/snake_ai_pytorch/controllers/enjoy.py
+```
+
+> ## To play yourself
+
+```bash
+python src/snake_ai_pytorch/controllers/play.py
 ```

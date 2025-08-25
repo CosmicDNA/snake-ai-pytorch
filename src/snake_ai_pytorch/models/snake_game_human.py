@@ -47,7 +47,7 @@ class SnakeGameHuman:
 
             # 4. Check for game over
             if game_over:
-                logging.info("Final Score", score)
+                logging.info(f"Final Score: {score}")
                 # A short delay to see the final score before the window closes
                 pygame.time.wait(1500)
                 running = False
