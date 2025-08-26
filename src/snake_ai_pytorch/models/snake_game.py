@@ -1,6 +1,7 @@
 import numpy as np
 import pygame
 
+from snake_ai_pytorch.models.collision import Collision
 from snake_ai_pytorch.models.direction import Direction
 from snake_ai_pytorch.models.point import Point
 from snake_ai_pytorch.models.renderer import Renderer
@@ -53,6 +54,13 @@ class SnakeGame:
             self.renderer.play_eat_sound()
         self._place_food()
 
+    def _collide(self, collision: Collision):
+        if self.renderer:
+            if collision == Collision.BOUNDARY:
+                self.renderer.play_collide_sound()
+            elif collision == Collision.ITSELF:
+                self.renderer.play_itself_sound()
+
     def play_step(self, direction):
         # 2. move
         self._move(direction)  # update the head
@@ -60,8 +68,10 @@ class SnakeGame:
 
         # 3. check if game over
         game_over = False
-        if self.is_collision():
+        collision = self.get_collision()
+        if collision:
             game_over = True
+            self._collide(collision)
         else:
             # 4. place new food or just move
             if self.head == self.food:
@@ -72,14 +82,17 @@ class SnakeGame:
         # 6. return game over and score
         return game_over, self.score
 
-    def is_collision(self, pt=None):
+    def get_collision(self, pt=None) -> Collision | None:
         if pt is None:
             pt = self.head
         # hits boundary
         if pt.x > self.w - BLOCK_SIZE or pt.x < 0 or pt.y > self.h - BLOCK_SIZE or pt.y < 0:
-            return True
+            return Collision.BOUNDARY
         # hits itself
-        return pt in self.snake[1:]
+        return Collision.ITSELF if pt in self.snake[1:] else None
+
+    def is_collision(self, pt=None):
+        return self.get_collision() is not None
 
     def _move(self, direction):
         self.head += self.direction_map[direction]

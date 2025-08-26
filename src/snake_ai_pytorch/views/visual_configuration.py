@@ -1,6 +1,3 @@
-from pathlib import Path
-
-
 class GameColors:
     WHITE = (255, 255, 255)
     RED = (200, 0, 0)
@@ -9,18 +6,17 @@ class GameColors:
     BLACK = (0, 0, 0)
 
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-
-
 class FontConfig:
-    # Construct a path to the font file relative to this script's location
-    path = BASE_DIR / "assets" / "arial.ttf"
+    # Path to the font file relative to the package root.
+    path = "assets/arial.ttf"
     size = 25
 
 
 class SoundConfig:
-    # Path to the sound file for when the snake eats food
-    eat_path = BASE_DIR / "assets" / "eat.wav"
+    # Path to the sound file relative to the package root.
+    eat_path = "assets/eat.wav"
+    collide_path = "assets/collide.wav"
+    itself_path = "assets/itself.wav"
 
 
 BLOCK_SIZE = 20

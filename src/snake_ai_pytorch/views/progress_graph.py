@@ -1,86 +1,89 @@
 import multiprocessing as mp
-from queue import Empty
+from queue import Empty, Queue
+
+
+def _plotter_process(queue: Queue, train):
+    """Runs in a separate process to handle plotting with Matplotlib.
+
+    This function is defined at the top level to avoid pickling issues on Windows.
+    """
+    import matplotlib.pyplot as plt
+
+    plt.ion()  # Turn on interactive mode
+    fig, ax = plt.subplots()
+    ax.set_title(f"{'Training' if train else 'Playing'}...")
+    ax.set_xlabel("Number of Games")
+    ax.set_ylabel("Score")
+    (score_line,) = ax.plot([], [], label="Score")
+    (mean_score_line,) = ax.plot([], [], label="Mean Score")
+    score_text = ax.text(0, 0, "")
+    mean_score_text = ax.text(0, 0, "")
+    ax.legend(loc="upper left")
+
+    scores = []
+    mean_scores = []
+    training_end_marker = None
+    vline = None
+
+    def update_plot_data():
+        nonlocal vline
+
+        x_data = range(len(scores))
+        score_line.set_data(x_data, scores)
+        mean_score_line.set_data(x_data, mean_scores)
+
+        if scores:
+            last_game_idx = len(scores) - 1
+            score_text.set_position((last_game_idx, scores[-1]))
+            score_text.set_text(str(scores[-1]))
+            mean_score_text.set_position((last_game_idx, mean_scores[-1]))
+            mean_score_text.set_text(f"{mean_scores[-1]:.2f}")
+
+        if training_end_marker is not None and vline is None:
+            vline = ax.axvline(x=training_end_marker, color="r", linestyle="--", label="End of Training")
+            ax.legend(loc="upper left")
+
+        ax.relim()
+        ax.autoscale_view()
+        ax.set_ylim(bottom=0, top=max(scores) if scores else 1)  # Avoid error on empty scores
+        fig.canvas.draw()
+        fig.canvas.flush_events()
+
+    while True:
+        try:
+            # Use a non-blocking get to avoid race conditions and deadlocks
+            data = queue.get_nowait()
+            if data is None:  # Sentinel for stopping
+                break
+
+            command, values = data
+            if command == "load":
+                scores, mean_scores = values
+            elif command == "plot":
+                score, mean_score = values
+                scores.append(score)
+                mean_scores.append(mean_score)
+            elif command == "add_marker":
+                training_end_marker = values
+            update_plot_data()
+
+        except Empty:
+            # No data in the queue, pause briefly to allow the GUI to process events
+            plt.pause(0.1)
+        except (KeyboardInterrupt, BrokenPipeError):
+            break
+        except Exception:  # Catches exceptions if the window is closed manually
+            break
+
+    plt.ioff()
+    plt.close(fig)
 
 
 class Plotting:
     def __init__(self, train):
-        # We import pyplot in the child process to avoid issues with forking on some OSes.
-        def plotter_process(queue, train):
-            """Runs in a separate process to handle plotting."""
-            import matplotlib.pyplot as plt
-
-            plt.ion()
-            fig, ax = plt.subplots()
-            ax.set_title(f"{'Training' if train else 'Playing'}...")
-            ax.set_xlabel("Number of Games")
-            ax.set_ylabel("Score")
-            (score_line,) = ax.plot([], [], label="Score")
-            (mean_score_line,) = ax.plot([], [], label="Mean Score")
-            score_text = ax.text(0, 0, "")
-            mean_score_text = ax.text(0, 0, "")
-            ax.legend(loc="upper left")
-
-            scores = []
-            mean_scores = []
-            training_end_marker = None
-            vline = None
-
-            def update_plot_data():
-                nonlocal vline
-
-                x_data = range(len(scores))
-                score_line.set_data(x_data, scores)
-                mean_score_line.set_data(x_data, mean_scores)
-
-                if scores:
-                    last_game_idx = len(scores) - 1
-                    score_text.set_position((last_game_idx, scores[-1]))
-                    score_text.set_text(str(scores[-1]))
-                    mean_score_text.set_position((last_game_idx, mean_scores[-1]))
-                    mean_score_text.set_text(f"{mean_scores[-1]:.2f}")
-
-                if training_end_marker is not None and vline is None:
-                    vline = ax.axvline(x=training_end_marker, color="r", linestyle="--", label="End of Training")
-                    ax.legend(loc="upper left")
-
-                ax.relim()
-                ax.autoscale_view()
-                ax.set_ylim(bottom=0, top=max(scores))
-                fig.canvas.draw()
-                fig.canvas.flush_events()
-
-            while True:
-                try:
-                    # Use a non-blocking get to avoid race conditions and deadlocks
-                    data = queue.get_nowait()
-                    if data is None:  # Sentinel for stopping
-                        break
-
-                    command, values = data
-                    if command == "load":
-                        scores, mean_scores = values
-                    elif command == "plot":
-                        score, mean_score = values
-                        scores.append(score)
-                        mean_scores.append(mean_score)
-                    elif command == "add_marker":
-                        training_end_marker = values
-                    update_plot_data()
-
-                except Empty:
-                    # No data in the queue, pause briefly to allow the GUI to process events
-                    plt.pause(0.1)
-                except (KeyboardInterrupt, BrokenPipeError):
-                    break
-                except Exception:  # Catches exceptions if the window is closed manually
-                    break
-
-            plt.ioff()
-            plt.close(fig)
-
         # Use a multiprocessing queue for safe data exchange
         self.queue = mp.Queue()
-        self.process = mp.Process(target=plotter_process, args=(self.queue, train), daemon=True)
+        self.process = mp.Process(target=_plotter_process, args=(self.queue, train), daemon=True)
         # The agent still needs to track scores for saving checkpoints
         self.scores = []
         self.mean_scores = []

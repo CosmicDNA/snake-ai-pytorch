@@ -5,3 +5,4 @@ logs/
 src/snake_ai_pytorch.egg-info/
 .pytest_cache/
 model/
+~/.cache/

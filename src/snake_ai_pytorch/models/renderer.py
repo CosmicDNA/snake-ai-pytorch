@@ -1,5 +1,7 @@
+import importlib.resources
 import logging
 import os
+import sys
 from typing import TYPE_CHECKING
 
 import pygame
@@ -12,18 +14,45 @@ if TYPE_CHECKING:
 
 class Renderer:
     def __init__(self, game: "SnakeGame"):
-        # Force SDL to use the pulse audio driver, which is forwarded by WSL2.
-        # This must be set before pygame is initialized.
-        os.environ["SDL_AUDIODRIVER"] = "pulse"
+        # On Linux-based systems like WSL2, force SDL to use the 'pulse' audio driver,
+        # which is often forwarded correctly. This must be set before pygame is initialized.
+        if sys.platform == "linux":
+            os.environ["SDL_AUDIODRIVER"] = "pulse"
+
         pygame.init()
+
         self.game = game
-        self.font = pygame.font.Font(FontConfig.path, FontConfig.size)
-        self.eat_sound = None
+
+        # Dynamically get the root package name to load resources.
+        root_package = __package__.split(".")[0]
+
         try:
-            # Initialize with a smaller buffer for lower latency.
-            self.eat_sound = pygame.mixer.Sound(SoundConfig.eat_path)
-        except pygame.error as e:
-            logging.warning(f"Could not initialise sound: {e}")
+            font_path_traversable = importlib.resources.files(root_package).joinpath(FontConfig.path)
+            with importlib.resources.as_file(font_path_traversable) as font_path:
+                self.font = pygame.font.Font(font_path, FontConfig.size)
+        except (FileNotFoundError, pygame.error) as e:
+            logging.warning(f"Could not load custom font '{FontConfig.path}': {e}. Falling back to default font.")
+            self.font = pygame.font.Font(None, FontConfig.size)
+
+        pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=256)
+        try:
+            sound_path_traversable = importlib.resources.files(root_package).joinpath(SoundConfig.eat_path)
+            with importlib.resources.as_file(sound_path_traversable) as sound_path:
+                self.eat_sound = pygame.mixer.Sound(sound_path)
+        except (FileNotFoundError, pygame.error) as e:
+            logging.warning(f"Could not initialise eat sound: {e}")
+        try:
+            collide_path_traversable = importlib.resources.files(root_package).joinpath(SoundConfig.collide_path)
+            with importlib.resources.as_file(collide_path_traversable) as collide_path:
+                self.collide_sound = pygame.mixer.Sound(collide_path)
+        except (FileNotFoundError, pygame.error) as e:
+            logging.warning(f"Could not initialise collide sound: {e}")
+        try:
+            itself_path_traversable = importlib.resources.files(root_package).joinpath(SoundConfig.itself_path)
+            with importlib.resources.as_file(itself_path_traversable) as itself_path:
+                self.itself_sound = pygame.mixer.Sound(itself_path)
+        except (FileNotFoundError, pygame.error) as e:
+            logging.warning(f"Could not initialise collide sound: {e}")
         # init display
         self.display = pygame.display.set_mode((self.game.w, self.game.h))
         pygame.display.set_caption("Snake")
@@ -33,6 +62,14 @@ class Renderer:
     def play_eat_sound(self):
         if self.eat_sound:
             self.eat_sound.play()
+
+    def play_collide_sound(self):
+        if self.collide_sound:
+            self.collide_sound.play()
+
+    def play_itself_sound(self):
+        if self.itself_sound:
+            self.itself_sound.play()
 
     def render(self, render_fps=SPEED):
         self.display.fill(GameColors.BLACK)

@@ -35,7 +35,10 @@ class SnakeGameAI(SnakeGame):
 
         # 3. check if game over
         game_over = False
-        if self.is_collision() or self.frame_iteration > 100 * len(self.snake):
+        collision = self.get_collision()
+        if collision or self.frame_iteration > 100 * len(self.snake):
+            if collision:
+                self._collide(collision)
             game_over = True
             reward += self.REWARD_GAMEOVER
             return reward, game_over, self.score

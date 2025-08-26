@@ -8,14 +8,14 @@ version = "1.0"
 dependencies = [
     "pygame",
     "gymnasium",
-    "rl-zoo3",
     "IPython",
-    "torch==2.5.1", # For testing with RL algorithms ONLY_OLDER_CUDA
+    "torch",
+    "matplotlib"
 ]
 
 # # Remove all the lines marked with ONLY_OLDER_CUDA if you want to use the latest CUDA version
 [tool.pip] # ONLY_OLDER_CUDA
-extra-index-url = "https://download.pytorch.org/whl/cu124" # ONLY_OLDER_CUDA
+extra-index-url = "https://download.pytorch.org/whl/cu126" # ONLY_OLDER_CUDA
 
 [project.optional-dependencies]
 test = [
