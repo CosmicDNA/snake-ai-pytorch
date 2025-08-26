@@ -153,7 +153,6 @@ class Agent:
             # perform move and get new state from environment
             state_new, reward, terminated, truncated, info = env.step(action)
             score = info["score"]
-            env.render()
 
             if train:
                 # train short memory

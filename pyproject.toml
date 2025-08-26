@@ -5,9 +5,11 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "snake-ai-pytorch"
 version = "1.0"
+requires-python = ">=3.13,<3.14"
 dependencies = [
     "pygame",
     "gymnasium",
+    "stable-baselines3[extra]",
     "IPython",
     "torch",
     "matplotlib"

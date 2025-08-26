@@ -86,6 +86,7 @@ class SnakeEnv(gym.Env):
         reward, terminated, score = self.game.play_step(action_array)
         observation = self._get_obs()
         info = self._get_info()
+        self.render()
         return observation, reward, terminated, False, info  # truncated is always False
 
     def render(self):
