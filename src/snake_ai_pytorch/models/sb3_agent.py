@@ -18,49 +18,22 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 class CustomCallback(BaseCallback):
     """A custom callback that integrates with Plotting, saves the best model, and logs progress."""
 
-    def __init__(self, plotting: Plotting | None, stats_path: Path, model_save_path: Path, verbose=0):
+    def __init__(self, agent: "SB3Agent", verbose=0):
         super().__init__(verbose)
-        self.plotting = plotting
-        self.stats_path = stats_path
-        self.model_save_path = model_save_path
-        # These will be initialized from the agent before training starts
-        self.total_score = 0
-        self.n_games = 0
-        self.record = 0
+        self.agent = agent
 
     def _on_step(self) -> bool:
         # Check if any environments are done (since we have one, we check for any)
         if np.any(self.locals["dones"]):
-            self.n_games += 1
             score = self.locals["infos"][0]["score"]
-            self.total_score += score
+            is_new_record = self.agent._on_episode_end(score)
 
-            if score > self.record:
-                self.record = score
-                logging.info(f"New record: {self.record}! Saving model to {self.model_save_path}")
-                self.model.save(self.model_save_path)
-                self._save_stats()
-
-            if self.plotting:
-                mean_score = self.total_score / self.n_games
-                self.plotting.plot(score, mean_score)
-
-            logging.info(f"Game: {self.n_games}, Score: {score}, Record: {self.record}")
+            if is_new_record:
+                logging.info(f"New record: {self.agent.record}! Saving model to {self.agent.model_path}")
+                self.model.save(self.agent.model_path)
+                # Also save the stats, so the record and plot data are persisted
+                self.agent._save_stats()
         return True
-
-    def _save_stats(self):
-        """Saves plotting data and other statistics."""
-        if not self.plotting:
-            return
-        stats = {
-            "n_games": len(self.plotting.scores),
-            "record": self.record,
-            "total_score": sum(self.plotting.scores),
-            "plot_scores": self.plotting.scores,
-            "plot_mean_scores": self.plotting.mean_scores,
-        }
-        torch.save(stats, self.stats_path)
-        logging.info(f"Stats saved to {self.stats_path}")
 
 
 class SB3Agent:
@@ -76,12 +49,11 @@ class SB3Agent:
         # The environment will not render if render_mode is not 'human'
         self.env = SnakeEnv(render_mode=self.render_mode)
 
-        # Setup plotting only if rendering is enabled
+        # Plotting is now initialized lazily in train() or play()
         self.plotting = None
-        if self.render_mode == "human":
-            self.plotting = Plotting(train=True)
-            self.plotting.start()
-            atexit.register(self.plotting.stop)
+        self._loaded_plot_scores = []
+        self._loaded_plot_mean_scores = []
+        self.model = None  # Model is now lazy-loaded
 
         # Load existing stats if available
         self.n_games = 0
@@ -89,76 +61,128 @@ class SB3Agent:
         self.total_score = 0
         self._load_stats()
 
+    def _setup_model(self, for_training: bool):
+        """Initializes the model, loading from a file or creating a new one."""
+        if self.model is not None:
+            return
+
         # Setup SB3 logger to output to console, csv, and tensorboard
         log_path = Path("logs/sb3_logs/")
         sb3_logger = configure(str(log_path), ["stdout", "csv", "tensorboard"])
 
+        model_to_load = None
+        if for_training:
+            # For training, prioritize the final model to resume, then the best model
+            final_model_path = self.model_path.with_suffix(".final.zip")
+            if final_model_path.exists():
+                logging.info(f"Found a final model state. Resuming training from {final_model_path}")
+                model_to_load = final_model_path
+            elif self.model_path.exists():
+                logging.info(f"Found a best model. Continuing training from {self.model_path}...")
+                model_to_load = self.model_path
+        else:  # For playing, only use the 'best' model
+            if self.model_path.exists():
+                logging.info(f"Loading best model for playing from {self.model_path}...")
+                model_to_load = self.model_path
+
         # Define the model
-        if self.model_path.exists():
-            logging.info(f"Loading existing model from {self.model_path}...")
-            self.model = DQN.load(self.model_path, env=self.env)
-            self.model.set_logger(sb3_logger)
-        else:
+        if model_to_load:
+            # When loading, SB3 automatically handles the device. Re-assigning the env and logger is good practice.
+            self.model = DQN.load(model_to_load, env=self.env)
+        elif for_training:
             logging.info("Creating a new model...")
-            policy_kwargs = {
-                "net_arch": [256],  # Corresponds to hidden_size=256
-            }
+            policy_kwargs = {"net_arch": [256]}  # Corresponds to hidden_size=256
             self.model = DQN(
                 "MlpPolicy",
                 self.env,
-                learning_rate=0.001,  # Corresponds to LR
-                buffer_size=100_000,  # Corresponds to MAX_MEMORY
-                learning_starts=1000,  # Steps to collect before training starts
-                batch_size=1000,  # Corresponds to BATCH_SIZE
-                gamma=0.9,  # Discount factor
-                train_freq=(1, "step"),  # Train the agent every step
+                learning_rate=0.001,
+                buffer_size=100_000,
+                learning_starts=1000,
+                batch_size=1000,
+                gamma=0.9,
+                train_freq=(1, "step"),
                 gradient_steps=1,
-                target_update_interval=1000,  # Update the target network every 1000 steps
-                exploration_fraction=0.2,  # Epsilon decay over 20% of total training
-                exploration_final_eps=0.02,  # Final value of epsilon
+                target_update_interval=1000,
+                exploration_fraction=0.2,
+                exploration_final_eps=0.02,
                 policy_kwargs=policy_kwargs,
                 verbose=1,
             )
-            self.model.set_logger(sb3_logger)
+        else:  # Not training and no model exists
+            logging.error(f"No model found at {self.model_path}. Please train the agent first.")
+            return
+
+        self.model.set_logger(sb3_logger)
 
     def _load_stats(self):
         if self.stats_path.exists():
             logging.info(f"Loading stats from {self.stats_path}...")
-            stats = torch.load(self.stats_path, weights_only=True)
+            stats = torch.load(self.stats_path, weights_only=False)  # nosec B614
             self.n_games = stats.get("n_games", 0)
             self.record = stats.get("record", 0)
             self.total_score = stats.get("total_score", 0)
-            if self.plotting:
-                plot_scores = stats.get("plot_scores", [])
-                plot_mean_scores = stats.get("plot_mean_scores", [])
-                self.plotting.load_data(plot_scores, plot_mean_scores)
+            # Store plot data to be loaded when plotting is initialized
+            self._loaded_plot_scores = stats.get("plot_scores", [])
+            self._loaded_plot_mean_scores = stats.get("plot_mean_scores", [])
             logging.info(f"Resuming from game {self.n_games} with record {self.record}")
 
-    def _save_stats_on_exit(self, callback: CustomCallback):
-        """Saves the final stats upon exiting training."""
+    def _start_plotting(self, train: bool = False):
+        """Initializes the plotting process if it hasn't been already."""
+        if self.render_mode != "human" or self.plotting is not None:
+            return
+
+        self.plotting = Plotting(train=train)
+        if self._loaded_plot_scores:
+            self.plotting.load_data(self._loaded_plot_scores, self._loaded_plot_mean_scores)
+
+        self.plotting.start()
+        atexit.register(self.plotting.stop)
+
+    def _on_episode_end(self, score: int) -> bool:
+        """Handles the logic at the end of an episode: updates stats, plots, and returns if a new record was set.
+
+        Args:
+            score: The score of the completed episode.
+
+        Returns:
+            A boolean indicating if a new record was achieved.
+
+        """
+        self.n_games += 1
+        self.total_score += score
+
+        is_new_record = False
+        if score > self.record:
+            self.record = score
+            is_new_record = True
+
+        logging.info(f"Game: {self.n_games}, Score: {score}, Record: {self.record}")
+
+        if self.plotting:
+            mean_score = self.total_score / self.n_games
+            self.plotting.plot(score, mean_score)
+
+        return is_new_record
+
+    def _save_stats(self):
+        """Saves plotting data and other statistics."""
         if not self.plotting:
             return
         stats = {
-            "n_games": len(callback.plotting.scores),
-            "record": callback.record,
-            "total_score": sum(callback.plotting.scores),
-            "plot_scores": callback.plotting.scores,
-            "plot_mean_scores": callback.plotting.mean_scores,
+            "n_games": self.n_games,
+            "record": self.record,
+            "total_score": self.total_score,
+            "plot_scores": self.plotting.scores,
+            "plot_mean_scores": self.plotting.mean_scores,
         }
         torch.save(stats, self.stats_path)
-        logging.info(f"Final stats saved to {self.stats_path}")
+        logging.info(f"Stats saved to {self.stats_path}")
 
     def train(self, total_timesteps=200_000):
         """Trains the agent using the SB3 learn method."""
-        custom_callback = CustomCallback(
-            plotting=self.plotting,
-            stats_path=self.stats_path,
-            model_save_path=self.model_path,
-        )
-        # Pass current stats to the callback
-        custom_callback.n_games = self.n_games
-        custom_callback.total_score = self.total_score
-        custom_callback.record = self.record
+        self._setup_model(for_training=True)
+        self._start_plotting(train=True)
+        custom_callback = CustomCallback(agent=self)
 
         try:
             self.model.learn(
@@ -174,35 +198,26 @@ class SB3Agent:
             final_model_path = self.model_path.with_suffix(".final.zip")
             self.model.save(final_model_path)
             logging.info(f"Final model saved to {final_model_path}")
-            self._save_stats_on_exit(custom_callback)
+            self._save_stats()
 
     def play(self):
         """Lets the trained agent play the game and plots the scores."""
-        if not self.model_path.exists():
-            logging.error(f"No model found at {self.model_path}. Please train the agent first.")
-            return
+        self._setup_model(for_training=False)
+        self._start_plotting()
 
-        model = DQN.load(self.model_path, env=self.env)
+        if self.model is None:
+            return
 
         if self.plotting and self.plotting.scores:
             self.plotting.add_training_marker(len(self.plotting.scores) - 1)
 
         obs, _ = self.env.reset()
-        play_n_games = self.n_games
-        play_total_score = self.total_score
 
         while True:
-            action, _ = model.predict(obs, deterministic=True)
+            action, _ = self.model.predict(obs, deterministic=True)
             obs, _, terminated, truncated, info = self.env.step(action)
             if terminated or truncated:
                 score = info["score"]
-                play_n_games += 1
-                play_total_score += score
-                mean_score = play_total_score / play_n_games
-
-                logging.info(f"Game: {play_n_games}, Score: {score}")
-
-                if self.plotting:
-                    self.plotting.plot(score, mean_score)
-
+                # The agent's internal state will be updated
+                self._on_episode_end(score)
                 obs, _ = self.env.reset()

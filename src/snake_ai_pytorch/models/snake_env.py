@@ -5,7 +5,6 @@ from gymnasium import spaces
 from snake_ai_pytorch.models.direction import Direction
 from snake_ai_pytorch.models.point import Point
 from snake_ai_pytorch.models.snake_game_ai import SnakeGameAI
-from snake_ai_pytorch.views.visual_configuration import BLOCK_SIZE
 
 
 class SnakeEnv(gym.Env):
@@ -30,10 +29,11 @@ class SnakeEnv(gym.Env):
         This logic was previously in Agent.get_state().
         """
         head = self.game.snake[0]
-        point_l = Point(head.x - BLOCK_SIZE, head.y)
-        point_r = Point(head.x + BLOCK_SIZE, head.y)
-        point_u = Point(head.x, head.y - BLOCK_SIZE)
-        point_d = Point(head.x, head.y + BLOCK_SIZE)
+        # Points are now relative to the head in grid units.
+        point_l = Point(head.x - 1, head.y)
+        point_r = Point(head.x + 1, head.y)
+        point_u = Point(head.x, head.y - 1)
+        point_d = Point(head.x, head.y + 1)
 
         dir_l = self.game.direction == Direction.LEFT
         dir_r = self.game.direction == Direction.RIGHT

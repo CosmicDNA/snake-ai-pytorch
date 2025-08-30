@@ -53,36 +53,144 @@ class Renderer:
                 self.itself_sound = pygame.mixer.Sound(itself_path)
         except (FileNotFoundError, pygame.error) as e:
             logging.warning(f"Could not initialise collide sound: {e}")
+
         # init display
         self.display = pygame.display.set_mode((self.game.w, self.game.h))
         pygame.display.set_caption("Snake")
         self.clock = pygame.time.Clock()
         self.INNER_BLOCK_SIZE = BLOCK_SIZE - 2 * BORDER_SIZE
 
+        # Store previous state for optimized drawing
+        self.prev_snake = []
+        self.prev_food = None
+        self.prev_score = -1
+        self.prev_score_rect = None
+
+    def reset(self):
+        """Clears the screen and performs a full redraw of the current game state."""
+        self.display.fill(GameColors.BLACK)
+
+        # Draw snake
+        for pt in self.game.snake:
+            self._draw_snake_block(pt)
+
+        # Draw food
+        if self.game.food:
+            self._draw_food_block(self.game.food)
+
+        # Draw the initial score and store its rect
+        score_text = self.font.render("Score: " + str(self.game.score), True, GameColors.WHITE)
+        self.prev_score_rect = self.display.blit(score_text, (0, 0))
+
+        pygame.display.flip()
+
+        # Update previous state trackers
+        self.prev_snake = self.game.snake[:]
+        self.prev_food = self.game.food
+        self.prev_score = self.game.score
+
+    def _draw_snake_block(self, pt):
+        """Draws a single block of the snake and returns its rect."""
+        rect = pygame.Rect(pt.x * BLOCK_SIZE, pt.y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE)
+        pygame.draw.rect(self.display, GameColors.BLUE1, rect)
+        pygame.draw.rect(
+            self.display,
+            GameColors.BLUE2,
+            pygame.Rect(pt.x * BLOCK_SIZE + BORDER_SIZE, pt.y * BLOCK_SIZE + BORDER_SIZE, self.INNER_BLOCK_SIZE, self.INNER_BLOCK_SIZE),
+        )
+        return rect
+
+    def _draw_food_block(self, pt):
+        """Draws the food block and returns its rect."""
+        rect = pygame.Rect(pt.x * BLOCK_SIZE, pt.y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE)
+        pygame.draw.rect(self.display, GameColors.RED, rect)
+        return rect
+
+    def _erase_block(self, pt):
+        """Erases a block by drawing a black rectangle over it and returns its rect."""
+        rect = pygame.Rect(pt.x * BLOCK_SIZE, pt.y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE)
+        pygame.draw.rect(self.display, GameColors.BLACK, rect)
+        return rect
+
     def play_eat_sound(self):
-        if self.eat_sound:
+        if hasattr(self, "eat_sound") and self.eat_sound:
             self.eat_sound.play()
 
     def play_collide_sound(self):
-        if self.collide_sound:
+        if hasattr(self, "collide_sound") and self.collide_sound:
             self.collide_sound.play()
 
     def play_itself_sound(self):
-        if self.itself_sound:
+        if hasattr(self, "itself_sound") and self.itself_sound:
             self.itself_sound.play()
 
     def render(self, render_fps=SPEED):
-        self.display.fill(GameColors.BLACK)
+        """Optimized render function that only updates changed parts of the screen."""
+        updated_rects = []
+        score_needs_redraw = False
 
-        for pt in self.game.snake:
-            pygame.draw.rect(self.display, GameColors.BLUE1, pygame.Rect(pt.x, pt.y, BLOCK_SIZE, BLOCK_SIZE))
-            pygame.draw.rect(
-                self.display, GameColors.BLUE2, pygame.Rect(pt.x + BORDER_SIZE, pt.y + BORDER_SIZE, self.INNER_BLOCK_SIZE, self.INNER_BLOCK_SIZE)
-            )
+        # Find and erase the snake tail that was removed
+        to_erase = set(self.prev_snake) - set(self.game.snake)
+        for pt in to_erase:
+            erased_rect = self._erase_block(pt)
+            updated_rects.append(erased_rect)
+            # If the erased tail was under the score, we need to redraw the score.
+            if self.prev_score_rect and self.prev_score_rect.colliderect(erased_rect):
+                score_needs_redraw = True
 
-        pygame.draw.rect(self.display, GameColors.RED, pygame.Rect(self.game.food.x, self.game.food.y, BLOCK_SIZE, BLOCK_SIZE))
+        # Draw the new snake head
+        to_draw = set(self.game.snake) - set(self.prev_snake)
+        for pt in to_draw:
+            updated_rects.append(self._draw_snake_block(pt))
 
-        text = self.font.render("Score: " + str(self.game.score), True, GameColors.WHITE)
-        self.display.blit(text, [0, 0])
-        pygame.display.flip()
+        # Handle food changes
+        if self.game.food != self.prev_food:
+            # Erase the old food's position only if the snake's head hasn't moved there.
+            if self.prev_food and self.prev_food not in self.game.snake:
+                updated_rects.append(self._erase_block(self.prev_food))
+
+            if self.game.food:
+                updated_rects.append(self._draw_food_block(self.game.food))
+
+        # Handle score changes
+        if self.game.score != self.prev_score or score_needs_redraw:
+            # To correctly render the score as an overlay, we must restore the background
+            # behind the old score before drawing the new one.
+
+            # Create the new score surface to get its dimensions
+            new_score_surface = self.font.render("Score: " + str(self.game.score), True, GameColors.WHITE)
+            new_score_rect = new_score_surface.get_rect(topleft=(0, 0))
+
+            # The area to update is the union of the old and new score rectangles.
+            update_area = new_score_rect
+            if self.prev_score_rect:
+                update_area = self.prev_score_rect.union(new_score_rect)
+
+            # Restore the background by filling the update area, then redrawing any snake parts on top.
+            self.display.fill(GameColors.BLACK, update_area)
+            for pt in self.game.snake:
+                snake_part_rect = pygame.Rect(pt.x * BLOCK_SIZE, pt.y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE)
+                if update_area.colliderect(snake_part_rect):
+                    self._draw_snake_block(pt)
+
+            # Also redraw the food if it was in the update area
+            if self.game.food:
+                food_rect = pygame.Rect(self.game.food.x * BLOCK_SIZE, self.game.food.y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE)
+                if update_area.colliderect(food_rect):
+                    self._draw_food_block(self.game.food)
+
+            # Now, blit the new score text onto the correctly restored background.
+            self.display.blit(new_score_surface, new_score_rect)
+            self.prev_score_rect = new_score_rect
+            updated_rects.append(update_area)
+
+        # Update only the changed parts of the screen
+        if updated_rects:
+            pygame.display.update(updated_rects)
+
+        # Update state for the next frame
+        self.prev_snake = self.game.snake[:]
+        self.prev_food = self.game.food
+        self.prev_score = self.game.score
+
         self.clock.tick(render_fps)

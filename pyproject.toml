@@ -10,8 +10,9 @@ dependencies = [
     "pygame",
     "gymnasium",
     "stable-baselines3[extra]",
+    "sb3-contrib",
     "IPython",
-    "torch",
+    "torch==2.7.1",
     "matplotlib"
 ]
 

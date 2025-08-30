@@ -23,7 +23,7 @@ class SnakeGameAI(SnakeGame):
         super().reset()
         self.frame_iteration = 0
 
-    def play_step(self, action):
+    def play_step(self, action: list[int]):
         self.frame_iteration += 1
 
         # 1. determine new direction from action
@@ -53,7 +53,7 @@ class SnakeGameAI(SnakeGame):
 
         return reward, game_over, self.score
 
-    def _determine_direction(self, action):
+    def _determine_direction(self, action: list[int]):
         """Determines the new direction based on the AI's action.
 
         Action is a 3-element list: [straight, right_turn, left_turn]

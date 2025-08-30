@@ -23,7 +23,7 @@ class SnakeGameHuman:
             pygame.K_UP: Direction.UP,
             pygame.K_DOWN: Direction.DOWN,
         }
-        self.allowed_keys = [pygame.K_LEFT, pygame.K_RIGHT, pygame.K_UP, pygame.K_DOWN]
+        self.allowed_keys = self.key_direction_map.keys()
 
     def run(self):
         """Starts and manages the main game loop."""
